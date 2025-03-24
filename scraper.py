@@ -2,17 +2,24 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
+import os
 
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36'
 }
 
 urls = [
-    'https://groww.in/us-stocks/nke',
+    'https://groww.in/us-stocks/ko',
     'https://groww.in/us-stocks/fdp',
+    'https://groww.in/us-stocks/aapl',
+    'https://groww.in/us-stocks/bti',
+    'https://groww.in/us-stocks/amzn',
+    'https://groww.in/us-stocks/pm',
+    'https://groww.in/us-stocks/nvda'
 ]
 
 all_data = []
+print("Starting to scrape...")
 for url in urls:
     try:
         page = requests.get(url, headers=headers)
@@ -42,8 +49,8 @@ for url in urls:
         volume = "N/A"
         tables = soup.find_all('table')
         for table in tables:
-            if table.find('th', text=lambda t: t and 'Volume' in t):
-                volume_cell = table.find('td', text=lambda t: t and any(c.isdigit() for c in t))
+            if table.find('th', string=lambda t: t and 'Volume' in t):
+                volume_cell = table.find('td', string=lambda t: t and any(c.isdigit() for c in t))
                 if volume_cell:
                     volume = volume_cell.text.strip()
                     break
@@ -55,11 +62,16 @@ for url in urls:
         pass
     
     # Wait to avoid rate limiting
-    time.sleep(2)
+    time.sleep(10)
 
 if all_data:
     column_names = ["Company", "Price", "Change", "Volume"]
     df = pd.DataFrame(all_data, columns=column_names)
+
+    if os.path.exists('stocks.xlsx'):
+        os.remove('stocks.xlsx')
+        print("Existing Excel file deleted")
+        print("Scraping finished!")
 
     df.to_excel('stocks.xlsx', index=False)
 else:
