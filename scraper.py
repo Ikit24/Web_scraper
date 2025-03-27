@@ -7,12 +7,13 @@ import os
 headers = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36'
 }
-input_ticker = input("Please paste your desired ticker here. ").upper()
+input_ticker = input("Please paste your desired ticker here: ").upper()
 
 url = f'https://groww.in/us-stocks/{input_ticker}'
 
 all_data = []
 print("Starting to scrape...")
+
 try:
     page = requests.get(url, headers=headers)
     soup = BeautifulSoup(page.text, 'html.parser')
@@ -46,15 +47,21 @@ try:
             if volume_cell:
                 volume = volume_cell.text.strip()
                 break
+
+    PE_ratio = [
+        soup.find('td', string='P/E Ratio').find_next_sibling('td'),
+        soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
+    ]
+    PE_ratio = next((elem.text.strip() for elem in PE_ratio if elem), "N/A")
    
-    stock_data = [company, price, change, volume]
+    stock_data = [company, price, change, volume, PE_ratio]
     all_data.append(stock_data)
    
 except Exception as e:
     print(f"An error occurred: {e}")
 
 if all_data:
-    column_names = ["Company", "Price", "Change", "Volume"]
+    column_names = ["Company", "Price", "Change", "Volume", "P_E"]
     df = pd.DataFrame(all_data, columns=column_names)
     if os.path.exists('stocks.xlsx'):
         os.remove('stocks.xlsx')
