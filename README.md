@@ -1,5 +1,19 @@
-This is a webscraper for stocks
+Stock Data Scraper
 
-I use it look for my preferred stocks and their current price
+This Python script scrapes stock information from Groww.in for stock tickers, extracting key financial data and saving it to an Excel file.
 
-Additional data search will be added for P/E ratio, Book value and ROE
+Features:
+
+Concurrent web scraping of multiple stock tickers
+
+Extracts key stock information:
+
+Company Name
+Current Price
+Price Change
+Trading Volume
+P/E Ratio
+
+
+Saves data to an Excel spreadsheet
+Asynchronous processing for improved performance

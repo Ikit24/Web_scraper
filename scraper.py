@@ -53,15 +53,21 @@ try:
         soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
     ]
     PE_ratio = next((elem.text.strip() for elem in PE_ratio if elem), "N/A")
+
+    EPS_ratio = [
+        soup.find('td', string='EPS(TTM)').find_next_sibling('td'),
+        soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
+    ]
+    EPS_ratio = next((elem.text.strip() for elem in EPS_ratio if elem), "N/A")
    
-    stock_data = [company, price, change, volume, PE_ratio]
+    stock_data = [company, price, change, volume, PE_ratio, EPS_ratio]
     all_data.append(stock_data)
    
 except Exception as e:
     print(f"An error occurred: {e}")
 
 if all_data:
-    column_names = ["Company", "Price", "Change", "Volume", "P_E"]
+    column_names = ["Company", "Price", "Change", "Volume", "P_E", "EPS(TTM)"]
     df = pd.DataFrame(all_data, columns=column_names)
     if os.path.exists('stocks.xlsx'):
         os.remove('stocks.xlsx')
