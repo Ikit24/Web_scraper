@@ -48,6 +48,12 @@ try:
                 volume = volume_cell.text.strip()
                 break
 
+    market_cap = [
+        soup.find('td', string='Market Cap').find_next_sibling('td'),
+        soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
+    ]
+    market_cap = next((elem.text.strip() for elem in market_cap if elem), "N/A")
+
     PE_ratio = [
         soup.find('td', string='P/E Ratio').find_next_sibling('td'),
         soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
@@ -59,15 +65,21 @@ try:
         soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
     ]
     EPS_ratio = next((elem.text.strip() for elem in EPS_ratio if elem), "N/A")
+
+    Div_yield = [
+        soup.find('td', string='Div. Yield').find_next_sibling('td'),
+        soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
+    ]
+    Div_yield = next((elem.text.strip() for elem in Div_yield if elem), "N/A")
    
-    stock_data = [company, price, change, volume, PE_ratio, EPS_ratio]
+    stock_data = [company, price, change, market_cap, volume, PE_ratio, EPS_ratio, Div_yield]
     all_data.append(stock_data)
    
 except Exception as e:
     print(f"An error occurred: {e}")
 
 if all_data:
-    column_names = ["Company", "Price", "Change", "Volume", "P_E", "EPS(TTM)"]
+    column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "EPS(TTM)", "Div. Yield"]
     df = pd.DataFrame(all_data, columns=column_names)
     if os.path.exists('stocks.xlsx'):
         os.remove('stocks.xlsx')
