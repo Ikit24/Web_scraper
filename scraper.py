@@ -77,15 +77,21 @@ try:
         soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
     ]
     Div_yield = next((elem.text.strip() for elem in Div_yield if elem), "N/A")
+
+    book_value = [
+        soup.find('td', string='Book Value').find_next_sibling('td'),
+        soup.find('td', {'class': 'ustf141Value contentPrimary bodyLargeHeavy right-align'})
+    ]
+    book_value = next((elem.text.strip() for elem in book_value if elem), "N/A")
    
-    stock_data = [company, price, change, market_cap, volume, PE_ratio, PB_ratio, EPS_ratio, Div_yield]
+    stock_data = [company, price, change, market_cap, volume, PE_ratio, PB_ratio, EPS_ratio, Div_yield, book_value]
     all_data.append(stock_data)
    
 except Exception as e:
     print(f"An error occurred: {e}")
 
 if all_data:
-    column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield"]
+    column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value"]
     df = pd.DataFrame(all_data, columns=column_names)
     if os.path.exists('stocks.xlsx'):
         os.remove('stocks.xlsx')
