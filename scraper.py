@@ -11,7 +11,6 @@ def extract_basic_info(ticker):
 
     url = f'https://groww.in/us-stocks/{ticker}'
 
-    all_data = []
     print("Starting to scrape...")
 
     try:
@@ -84,26 +83,11 @@ def extract_basic_info(ticker):
         ]
         book_value = next((elem.text.strip() for elem in book_value if elem), "N/A")
     
-        stock_data = [company, price, change, market_cap, volume, PE_ratio, PB_ratio, EPS_ratio, Div_yield, book_value]
-        all_data.append(stock_data)
+        basic_data = [company, price, change, market_cap, volume, PE_ratio, PB_ratio, EPS_ratio, Div_yield, book_value]
+        return basic_data
     
     except Exception as e:
         print(f"An error occurred: {e}")
-    
-    export_to_excel(all_data)
-
-
-def export_to_excel(all_data, filename='stocks.xlsx'):
-    if all_data:
-        column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value"]
-        df = pd.DataFrame(all_data, columns=column_names)
-        if os.path.exists('stocks.xlsx'):
-            os.remove('stocks.xlsx')
-            print("Existing Excel file deleted")
-        df.to_excel('stocks.xlsx', index=False)
-        print("Scraping finished!")
-    else:
-        print("No data scraped")
 
 def extract_detailed_info(ticker):
     headers = {
@@ -111,28 +95,42 @@ def extract_detailed_info(ticker):
 }
     url = f'https://groww.in/us-stocks/{ticker}/company-financial'
 
-    all_data = []
-
     try:
         page = requests.get(url, headers=headers)
         soup = BeautifulSoup(page.text, 'html.parser')
 
-        revenues = [
-                soup.find('div', {'class': 'cf223RowHead bodyBase'})
-            ]
-        revenues = next((elem.text.strip() for elem in revenues if elem), "N/A")
+        revenues_elem = soup.find_all('div', {'class': 'tr12Col'})
+        if len(revenues_elem) >= 4:
+            revenues = revenues_elem[3].text.strip()
+        else:
+            revenues = "N/A"
+
+        detailed_data = [revenues]
+        return detailed_data
 
     except Exception as e:
         
         print(f"An error occurred: {e}")
-
-    export_to_excel(all_data)
-
+        
+def export_to_excel(basic_data, detailed_data, filename='stocks.xlsx'):
+    if basic_data is not None and detailed_data is not None:
+        
+        all_data = [basic_data + detailed_data]
+        column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value", "Revenues"]
+        df = pd.DataFrame(all_data, columns=column_names)
+        if os.path.exists(filename):
+            os.remove(filename)
+            print("Existing Excel file deleted")
+        df.to_excel(filename, index=False)
+        print("Scraping finished and data exported!")
+    else:
+        print("No data scraped")
 
 def main():
     ticker = input("Please paste your desired ticker here: ").upper()
-    extract_basic_info(ticker)
-    extract_detailed_info(ticker)
+    basic_data = extract_basic_info(ticker)
+    detailed_data = extract_detailed_info(ticker)
+    export_to_excel(basic_data, detailed_data)
 
 if __name__ == '__main__':
     main()
