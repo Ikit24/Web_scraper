@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import time
 import os
+import re
 
 def extract_basic_info(ticker):
     headers = {
@@ -101,22 +102,31 @@ def extract_detailed_info(ticker):
 
         revenues_elem = soup.find_all('div', {'class': 'tr12Col'})
         if len(revenues_elem) >= 4:
-            revenues = revenues_elem[3].text.strip()
+            revenues = revenues_elem[5].text.strip()
         else:
             revenues = "N/A"
 
-        detailed_data = [revenues]
+        cost_label = soup.find('div', string="Cost of Revenue")
+        if cost_label:
+            cost_row = cost_label.find_parent().find_next_sibling()
+            if cost_row:
+                cost_of_revenues = cost_row.find_all('div', {'class': 'tr12Col'})[5].text.strip()
+            else:
+                cost_of_revenues = "N/A"
+        else:
+            cost_of_revenues = "N/A"
+
+        detailed_data = [revenues, cost_of_revenues]
         return detailed_data
 
     except Exception as e:
-        
         print(f"An error occurred: {e}")
+        return ["N/A", "N/A"]
         
 def export_to_excel(basic_data, detailed_data, filename='stocks.xlsx'):
-    if basic_data is not None and detailed_data is not None:
-        
+    if basic_data is not None and detailed_data is not None:        
         all_data = [basic_data + detailed_data]
-        column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value", "Revenues"]
+        column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value", "Revenues", "Cost of revenues"]
         df = pd.DataFrame(all_data, columns=column_names)
         if os.path.exists(filename):
             os.remove(filename)
