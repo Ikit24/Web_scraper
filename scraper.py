@@ -98,26 +98,27 @@ def extract_detailed_info(ticker):
 
     try:
         page = requests.get(url, headers=headers)
+        page.raise_for_status()
         soup = BeautifulSoup(page.text, 'html.parser')
 
-        revenues_elem = soup.find_all('div', {'class': 'tr12Col'})
-        if len(revenues_elem) >= 4:
-            revenues = revenues_elem[5].text.strip()
-        else:
-            revenues = "N/A"
+        def get_latest_value(label):
+            label_element = soup.find('div', string=label)
+            if not label_element:
+                return "N/A"
+            
+            value_divs = label_element.find_next_siblings('div', class_='tr12Col')
+            
+            if not value_divs:
+                return "N/A"
+            
+            latest_value_div = value_divs[-1]
+            value = latest_value_div.find('div', class_='cf223RowHead')
+            return value.text.strip() if value else "N/A"
 
-        cost_label = soup.find('div', string="Cost of Revenue")
-        if cost_label:
-            cost_row = cost_label.find_parent().find_next_sibling()
-            if cost_row:
-                cost_of_revenues = cost_row.find_all('div', {'class': 'tr12Col'})[5].text.strip()
-            else:
-                cost_of_revenues = "N/A"
-        else:
-            cost_of_revenues = "N/A"
+        revenues = get_latest_value('Revenues')
+        cost_of_revenue = get_latest_value('Cost of Revenue')
 
-        detailed_data = [revenues, cost_of_revenues]
-        return detailed_data
+        return [revenues, cost_of_revenue]
 
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -126,7 +127,7 @@ def extract_detailed_info(ticker):
 def export_to_excel(basic_data, detailed_data, filename='stocks.xlsx'):
     if basic_data is not None and detailed_data is not None:        
         all_data = [basic_data + detailed_data]
-        column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value", "Revenues", "Cost of revenues"]
+        column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value", "Revenues", "Cost of Revenues"]
         df = pd.DataFrame(all_data, columns=column_names)
         if os.path.exists(filename):
             os.remove(filename)
