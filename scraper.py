@@ -84,7 +84,7 @@ def extract_basic_info(ticker):
         book_value = next((elem.text.strip() for elem in book_value if elem), "N/A")
     
         basic_data = [company, price, change, market_cap, volume, PE_ratio, PB_ratio, EPS_ratio, Div_yield, book_value]
-        return basic_data
+        return [basic_data]
     
     except Exception as e:
         print(f"An error occurred: {e}")
@@ -120,10 +120,16 @@ def extract_detailed_info(ticker):
         operating_expenses = get_latest_value('Operating Expenses')
         interest_expenses = get_latest_value('Interest Expense')
         depreciation_and_amortization = get_latest_value('Depreciation, Amortization & Accretion')
+        ebitda = get_latest_value('Earnings & Depreciation Amortization (EBITDA)')
+        gross_profit = get_latest_value('Gross Profit')
+        net_income = get_latest_value('Net Income')
+        weighted_avrg_shares = get_latest_value('Weighted Average Shares')
+        oprting_income = get_latest_value('Operating Income')
 
         return [
-            revenues, cost_of_revenue, gnrl_admin_expenses, operating_expenses,
-            interest_expenses, depreciation_and_amortization
+            [revenues, cost_of_revenue, gnrl_admin_expenses, operating_expenses,
+            interest_expenses, depreciation_and_amortization, ebitda, gross_profit,
+            net_income, weighted_avrg_shares, oprting_income]
             ]
 
     except Exception as e:
@@ -133,14 +139,15 @@ def extract_detailed_info(ticker):
 def export_to_excel(basic_data, detailed_data, filename='stocks.xlsx'):
     if basic_data is not None and detailed_data is not None:
         column_names1 = [
-            "Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B",
+            "Company", "Price", "Change", "Market Cap", "Volume", "P_E ratio", "P_B ratio",
             "EPS(TTM)", "Div. Yield", "Book Value"
             ]
         column_names2 = [
             "Revenues", "Cost of Revenues",
             "General & Administrative Expenses in USD millions",
             "Operating Expenses in USD millions", "Interest Expense in USD millions",
-            "Depreciation, Amortization & Accretion in USD millions"
+            "Depreciation, Amortization & Accretion in USD millions",
+            "EBITDA", "Gross Profit", "Net Income", "Weighted Average Shares", "Operating Income"
             ]
         
         df1 = pd.DataFrame(basic_data, columns=column_names1)
