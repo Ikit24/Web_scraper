@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import time
 import os
-import re
 
 def extract_basic_info(ticker):
     headers = {
@@ -117,22 +116,46 @@ def extract_detailed_info(ticker):
 
         revenues = get_latest_value('Revenues')
         cost_of_revenue = get_latest_value('Cost of Revenue')
+        gnrl_admin_expenses = get_latest_value('General & Administrative Expenses')
+        operating_expenses = get_latest_value('Operating Expenses')
+        interest_expenses = get_latest_value('Interest Expense')
+        depreciation_and_amortization = get_latest_value('Depreciation, Amortization & Accretion')
 
-        return [revenues, cost_of_revenue]
+        return [
+            revenues, cost_of_revenue, gnrl_admin_expenses, operating_expenses,
+            interest_expenses, depreciation_and_amortization
+            ]
 
     except Exception as e:
         print(f"An error occurred: {e}")
         return ["N/A", "N/A"]
         
 def export_to_excel(basic_data, detailed_data, filename='stocks.xlsx'):
-    if basic_data is not None and detailed_data is not None:        
-        all_data = [basic_data + detailed_data]
-        column_names = ["Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B", "EPS(TTM)", "Div. Yield", "Book Value", "Revenues", "Cost of Revenues"]
-        df = pd.DataFrame(all_data, columns=column_names)
+    if basic_data is not None and detailed_data is not None:
+        column_names1 = [
+            "Company", "Price", "Change", "Market Cap", "Volume", "P_E", "P_B",
+            "EPS(TTM)", "Div. Yield", "Book Value"
+            ]
+        column_names2 = [
+            "Revenues", "Cost of Revenues",
+            "General & Administrative Expenses in USD millions",
+            "Operating Expenses in USD millions", "Interest Expense in USD millions",
+            "Depreciation, Amortization & Accretion in USD millions"
+            ]
+        
+        df1 = pd.DataFrame(basic_data, columns=column_names1)
+        df2 = pd.DataFrame(detailed_data, columns=column_names2)
+
         if os.path.exists(filename):
             os.remove(filename)
             print("Existing Excel file deleted")
-        df.to_excel(filename, index=False)
+
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            df1.to_excel(writer, sheet_name='Sheet1', index=False, startrow=0)
+            
+            startrow_df2 = len(df1) + 3
+            df2.to_excel(writer, sheet_name='Sheet1', index=False, startrow=startrow_df2)
+        
         print("Scraping finished and data exported!")
     else:
         print("No data scraped")
