@@ -3,6 +3,12 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import os
 from selenium import webdriver
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.firefox.options import Options
+import time
 
 def extract_basic_info(ticker):
     headers = {
@@ -143,12 +149,7 @@ def extract_balance_sheet(ticker):
     url = f'https://groww.in/us-stocks/{ticker}/company-financial'
     
     try:
-        from selenium import webdriver
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.firefox.options import Options
-        import time
+        
         
         firefox_options = Options()
         firefox_options.add_argument("--headless")
