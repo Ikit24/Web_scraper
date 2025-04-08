@@ -3,12 +3,13 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import os
 from selenium import webdriver
-from selenium import webdriver
+from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.firefox.options import Options
+from bs4 import BeautifulSoup
 import time
+import logging
 
 def extract_basic_info(ticker):
     headers = {
@@ -141,16 +142,15 @@ def extract_detailed_info(ticker):
     except Exception as e:
         print(f'An error occurred: {e}')
         return ['N/A', 'N/A']
-    
+
 def extract_balance_sheet(ticker):
     headers = {
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     url = f'https://groww.in/us-stocks/{ticker}/company-financial'
+    driver = None
     
     try:
-        
-        
         firefox_options = Options()
         firefox_options.add_argument("--headless")
         firefox_options.set_preference("general.useragent.override", headers['user-agent'])
@@ -158,64 +158,178 @@ def extract_balance_sheet(ticker):
         driver = webdriver.Firefox(options=firefox_options)
         driver.get(url)
         
-        # Click Balance Sheet tab
-        balance_sheet_tab = WebDriverWait(driver, 20).until(
-            EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Balance Sheet')]"))
-        )
-        driver.execute_script("arguments[0].scrollIntoView();", balance_sheet_tab)
-        balance_sheet_tab.click()
-        
-        # Wait for data to load
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "tr12Row"))
-        )
-        time.sleep(2)  # Additional buffer
+        frames = driver.find_elements(By.TAG_NAME, "iframe")
+        if frames:
+            print(f"Found {len(frames)} iframes")
+
+        try:
+            balance_sheet_tab = WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Balance Sheet')]"))
+            )
+            driver.execute_script("arguments[0].scrollIntoView();", balance_sheet_tab)
+            balance_sheet_tab.click()
+            
+            # Verify tab click
+            print("Tab click attempted - checking for active tab...")
+            active_tabs = driver.find_elements(By.XPATH, "//div[contains(@class, 'active') and contains(text(), 'Balance Sheet')]")
+            print(f"Found {len(active_tabs)} active balance sheet tabs")
+            
+            time.sleep(5)
+            
+            # # Print page source for debugging
+            # print("Page source after tab click:", driver.page_source[:1000])
+            # print("Extended page source:", driver.page_source[:5000])
+            
+            try:
+                WebDriverWait(driver, 30).until(
+                    lambda d: "Balance Sheet" in d.page_source and len(d.find_elements(By.XPATH, "//div[contains(text(), 'Shareholders Equity')]")) > 0
+                )
+            except Exception as e:
+                print(f"Warning: Wait condition failed: {e}")
+            
+        except Exception as e:
+            print(f"Error clicking Balance Sheet tab: {e}")
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        driver.quit()
+        
+        # Look for various possible terms to identify the structure
+        balance_sheet_terms = ["Shareholders Equity", "Total Assets", "Current Assets", 
+                               "Balance Sheet", "Liabilities", "Cash and Equivalents"]
+        
+        for term in balance_sheet_terms:
+            elements = soup.find_all(string=lambda s: s and term in s)
+            print(f"Found {len(elements)} elements containing '{term}'")
+            if elements:
+                for elem in elements[:2]:  # Print first 2 examples
+                    parent = elem.parent
+                    print(f"Example element for '{term}': {parent.name}, classes: {parent.get('class', 'No class')}")
         
         def get_latest_value(label):
-            label_elements = soup.find_all('div', class_='valign-wrapper')
-            for element in label_elements:
-                if element.find('div', string=lambda s: s and label.lower() in s.lower().strip()):
-                    label_element = element
-                    break
-            else:
+            try:
+                label_element = None
+                # Try various selector patterns that might find the label
+                
+                # Method 1: Direct text search in all divs
+                all_divs = soup.find_all('div')
+                for div in all_divs:
+                    if div.string and label.lower() in div.string.lower():
+                        label_element = div
+                        print(f"Found {label} using direct text search")
+                        break
+                
+                if not label_element:
+                    # Method 2: Look for valign-wrapper class
+                    label_elements = soup.find_all('div', class_='valign-wrapper')
+                    for element in label_elements:
+                        if element.find('div', string=lambda s: s and label.lower() in s.lower().strip()):
+                            label_element = element
+                            print(f"Found {label} using valign-wrapper class")
+                            break
+                
+                if not label_element:
+                    # Method 3: More generic search for any element containing label text
+                    elements = soup.find_all(string=lambda s: s and label.lower() in s.lower().strip())
+                    if elements:
+                        label_element = elements[0].parent
+                        print(f"Found {label} using generic text search")
+                
+                if not label_element:
+                    print(f"Could not find element for {label}")
+                    return 'N/A'
+                
+                # Navigate up to find container and then locate value
+                # This is a generic approach since we don't know the exact structure
+                
+                # Method 1: Look for parent with Row class
+                row = label_element.find_parent('div', class_=lambda c: c and 'Row' in c)
+                
+                # Method 2: If no Row class, try parent with other potential indicators
+                if not row:
+                    # Look up to 3 levels for a div that might contain the value
+                    current = label_element
+                    for _ in range(3):
+                        if current.parent:
+                            current = current.parent
+                            if current.name == 'div' and len(current.find_all('div')) > 2:
+                                row = current
+                                print(f"Found container for {label} using level-up search")
+                                break
+                
+                if not row:
+                    print(f"Could not find container row for {label}")
+                    return 'N/A'
+                
+                # Try different ways to extract value
+                
+                # Method 1: Look for Col class elements
+                value_divs = row.find_all('div', class_=lambda c: c and 'Col' in c)
+                
+                # Method 2: If no Col class, look for any divs inside
+                if not value_divs or len(value_divs) < 2:
+                    value_divs = row.find_all('div', recursive=False)
+                
+                if not value_divs or len(value_divs) < 2:
+                    print(f"No value columns found for {label}")
+                    return 'N/A'
+                
+                # Try to get the latest value (usually last column)
+                latest_value_div = value_divs[-1]
+                
+                # Method 1: Look for RowHead class
+                value = latest_value_div.find('div', class_=lambda c: c and 'RowHead' in c)
+                
+                # Method 2: If no RowHead class, take the text directly
+                if not value:
+                    value = latest_value_div.get_text(strip=True)
+                    return value if value else 'N/A'
+                    
+                return value.text.strip() if value and hasattr(value, 'text') else 'N/A'
+            except Exception as e:
+                logging.error(f"Error extracting {label}: {e}")
                 return 'N/A'
-            
-            row = label_element.find_parent('div', class_=lambda c: c and 'Row' in c)
-            if not row:
-                return 'N/A'
-            
-            value_divs = row.find_all('div', class_=lambda c: c and 'Col' in c)
-            if not value_divs or len(value_divs) < 2:
-                return 'N/A'
-            
-            latest_value_div = value_divs[-1]
-            value = latest_value_div.find('div', class_=lambda c: c and 'RowHead' in c)
-            return value.text.strip() if value else 'N/A'
         
-        # Extract values
-        shareholders_equity = get_latest_value('Shareholders Equity')
-        total_assets = get_latest_value('Total Assets')
-        current_assets = get_latest_value('Current Assets')
-        non_current_assets = get_latest_value('Assets Non-Current')
-        current_liabilities = get_latest_value('Current Liabilities')
-        non_current_liabilities = get_latest_value('Liabilities Non-Current')
-        tax_liabilities = get_latest_value('Tax Liabilities')
-        tax_assets = get_latest_value('Tax Assets')
-        cash_and_equivalents = get_latest_value('Cash and Equivalents')
-        total_liabilities = get_latest_value('Total Liabilities')
+        # Extract the balance sheet data
+        balance_sheet_data = {
+            'Shareholders Equity': get_latest_value('Shareholders Equity'),
+            'Total Assets': get_latest_value('Total Assets'),
+            'Current Assets': get_latest_value('Current Assets'),
+            'Non-Current Assets': get_latest_value('Assets Non-Current'),
+            'Current Liabilities': get_latest_value('Current Liabilities'),
+            'Non-Current Liabilities': get_latest_value('Liabilities Non-Current'),
+            'Tax Liabilities': get_latest_value('Tax Liabilities'),
+            'Tax Assets': get_latest_value('Tax Assets'),
+            'Cash and Equivalents': get_latest_value('Cash and Equivalents'),
+            'Total Liabilities': get_latest_value('Total Liabilities')
+        }
+        
+        # Print what we found
+        print("\nExtracted balance sheet data:")
+        for key, value in balance_sheet_data.items():
+            print(f"{key}: {value}")
+        
+        # Check if meaningful data was extracted
+        if all(value == 'N/A' for value in balance_sheet_data.values()):
+            logging.warning(f"No meaningful data extracted for {ticker}")
         
         return [[
-            shareholders_equity, total_assets, current_assets, non_current_assets,
-            current_liabilities, non_current_liabilities, tax_liabilities, tax_assets,
-            cash_and_equivalents, total_liabilities
+            balance_sheet_data['Shareholders Equity'], 
+            balance_sheet_data['Total Assets'], 
+            balance_sheet_data['Current Assets'], 
+            balance_sheet_data['Non-Current Assets'],
+            balance_sheet_data['Current Liabilities'], 
+            balance_sheet_data['Non-Current Liabilities'], 
+            balance_sheet_data['Tax Liabilities'], 
+            balance_sheet_data['Tax Assets'],
+            balance_sheet_data['Cash and Equivalents'], 
+            balance_sheet_data['Total Liabilities']
         ]]
         
     except Exception as e:
-        print(f'An error occurred: {e}')
+        logging.error(f'Error extracting balance sheet for {ticker}: {e}')
         return [['N/A'] * 10]
+    finally:
+        if driver:
+            driver.quit()
         
 def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.xlsx'):
     if all(data_source is not None for data_source in(basic_data, detailed_data, balance_sheet)):
@@ -249,10 +363,10 @@ def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.x
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
             df1.to_excel(writer, sheet_name='Sheet1', index=False, startrow=0)
             
-            startrow_df2 = len(df1) + 3
+            startrow_df2 = len(df1) + 2
             df2.to_excel(writer, sheet_name='Sheet1', index=False, startrow=startrow_df2)
 
-            startrow_df3 = len(df2) + 6
+            startrow_df3 = len(df2) + 5
             df3.to_excel(writer, sheet_name='Sheet1', index=False, startrow=startrow_df3)
         
         print('Scraping finished and data exported!')
