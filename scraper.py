@@ -101,12 +101,20 @@ def extract_detailed_info(ticker):
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36'
 }
     url = f'https://groww.in/us-stocks/{ticker}/company-financial'
+    driver = None
 
     try:
-        page = requests.get(url, headers=headers)
-        page.raise_for_status()
-        soup = BeautifulSoup(page.text, 'html.parser')
+        firefox_options = Options()
+        firefox_options.add_argument("--headless")
+        firefox_options.set_preference("general.useragent.override", headers['user-agent'])
 
+        driver = webdriver.Firefox(options=firefox_options)
+        driver.get(url)
+
+        frames = driver.find_elements(By.TAG_NAME, "iframe")
+        if frames:
+            print(f"Found {len(frames)} iframes")
+            # CONTINUE FROM HERE
         def get_latest_value(label):
             label_element = soup.find('div', string=label)
             if not label_element:
@@ -238,7 +246,6 @@ def extract_balance_sheet(ticker):
                     return 'N/A'
                 
                 # Navigate up to find container and then locate value
-                # This is a generic approach since we don't know the exact structure
                 
                 # Method 1: Look for parent with Row class
                 row = label_element.find_parent('div', class_=lambda c: c and 'Row' in c)
@@ -288,7 +295,6 @@ def extract_balance_sheet(ticker):
                 logging.error(f"Error extracting {label}: {e}")
                 return 'N/A'
         
-        # Extract the balance sheet data
         balance_sheet_data = {
             'Shareholders Equity': get_latest_value('Shareholders Equity'),
             'Total Assets': get_latest_value('Total Assets'),
@@ -323,13 +329,18 @@ def extract_balance_sheet(ticker):
             balance_sheet_data['Cash and Equivalents'], 
             balance_sheet_data['Total Liabilities']
         ]]
-        
     except Exception as e:
         logging.error(f'Error extracting balance sheet for {ticker}: {e}')
         return [['N/A'] * 10]
     finally:
         if driver:
             driver.quit()
+
+def extract_income_statement(ticker):
+    pass
+
+def extract_cash_flow(ticker):
+    pass
         
 def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.xlsx'):
     if all(data_source is not None for data_source in(basic_data, detailed_data, balance_sheet)):
