@@ -114,42 +114,113 @@ def extract_detailed_info(ticker):
         frames = driver.find_elements(By.TAG_NAME, "iframe")
         if frames:
             print(f"Found {len(frames)} iframes")
-            # CONTINUE FROM HERE
+
+        try:
+            quarterly_results_tab = WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Quarterly Results')]"))
+            )
+            driver.execute_script("arguments[0].scrollIntoView();", quarterly_results_tab)
+            quarterly_results_tab.click()
+
+            active_tabs = driver.find_elements(By.XPATH, "//div[contains(@class, 'active') and contains(text(), 'Quarterly Results')]")
+            print(f"Found {len(active_tabs)} active quarterly results tabs")
+
+            time.sleep(5)
+
+            try:
+                WebDriverWait(driver, 30).until(
+                    lambda d: "Quarterly Results" in d.page_source and len(d.find_elements(By.XPATH, "//div[contains(text(), 'Revenues')]")) > 0
+                    )
+            except Exception as e:
+                print(f"Warning: Wait condition failed: {e}")
+        
+        except Exception as e:
+            print(f"Error clicking Quarterly Results tab: {e}")
+
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        quarterly_results_terms = ["Revenues", "Cost of Revenue", "General & Administrative Expenses",
+                                   "Operating Expenses", "Interest Expense", "Depreciation, Amortization & Accretion",
+                                   "Earnings & Depreciation Amortization (EBITDA)", "Gross Profit",
+                                   "Net Income", "Weighted Average Shares", "Operating Income"]
+        
+        for term in quarterly_results_terms:
+            elements = soup.find_all(string=lambda s : s and term in s)
+            if elements:
+                for elem in elements[:2]:
+                    parent= elem.parent
+
         def get_latest_value(label):
-            label_element = soup.find('div', string=label)
-            if not label_element:
+            try:
+                label_element = None
+
+                all_divs = soup.find_all('div')
+                for div in all_divs:
+                    if div.string and label.lower() in div.string.lower():
+                        label_element = div
+                        print(f"Found {label} using direct text search")
+                        break
+
+                if not label_element:
+                    label_elements = soup.find_all('div', class_='valign-wrapper')
+                    for element in label_elements:
+                        if element.find('div', string=lambda s: s and label.lower() in s.lower().strip()):
+                            label_element = element
+                            print(f"Found {label} using valign-wrapper class")
+                            break
+
+                if not label_element:
+                    elements = soup.find_all(string=lambda s: s and label.lower() in s.lower().strip())
+                    if elements:
+                        label_element = elements[0].parent
+                        print(f"Found {label} using generic text search")
+
+                if not label_element:
+                    print(f"Could not find element for {label}")
+                    return 'N/A'
+                
+                row = label_element.find_parent('div', class_=lambda c: c and 'Row' in c)
+
+                if not row:
+                    current = label_element
+                    for _ in range(5):
+                        if current.parent:
+                            current = current.parent
+                            if current.name == 'div' and len(current.find_all('div')) > 2:
+                                row = current
+                                print(f"Found container for {label} using level-up search")
+                                break
+                
+                if not row:
+                    print(f"Could not find container row for {label}")
+                    return 'N/A'
+                
+                value_divs = row.find_all('div', class_=lambda c:c and 'Col' in c)
+
+                if not value_divs or len(value_divs) < 2:
+                    value_divs = row.find_all('div', revursive=False)
+                
+                if not value_divs or len(value_divs) < 2:
+                    print(f"No value columns found for {label}")
+                    return 'N/A'
+                
+                latest_value_div = value_divs[-1]
+
+                value = latest_value_div.find('div', class_=lambda c: c and 'RowHead' in c)
+
+                if not value:
+                    value = latest_value_div.get_text(strip=True)
+                    return value if value else 'N/A'
+                
+                return value.text.strip() if value and hasattr(value, 'text') else 'N/A'
+            except Exception as e:
+                logging.error(f"Error extracting {label}: {e}")
                 return 'N/A'
-            
-            value_divs = label_element.find_next_siblings('div', class_='tr12Col')
-            
-            if not value_divs:
-                return 'N/A'
-            
-            latest_value_div = value_divs[-1]
-            value = latest_value_div.find('div', class_='cf223RowHead')
-            return value.text.strip() if value else 'N/A'
 
-        revenues = get_latest_value('Revenues')
-        cost_of_revenue = get_latest_value('Cost of Revenue')
-        gnrl_admin_expenses = get_latest_value('General & Administrative Expenses')
-        operating_expenses = get_latest_value('Operating Expenses')
-        interest_expenses = get_latest_value('Interest Expense')
-        depreciation_and_amortization = get_latest_value('Depreciation, Amortization & Accretion')
-        ebitda = get_latest_value('Earnings & Depreciation Amortization (EBITDA)')
-        gross_profit = get_latest_value('Gross Profit')
-        net_income = get_latest_value('Net Income')
-        weighted_avrg_shares = get_latest_value('Weighted Average Shares')
-        oprting_income = get_latest_value('Operating Income')
 
-        return [
-            [revenues, cost_of_revenue, gnrl_admin_expenses, operating_expenses,
-            interest_expenses, depreciation_and_amortization, ebitda, gross_profit,
-            net_income, weighted_avrg_shares, oprting_income]
-            ]
 
-    except Exception as e:
-        print(f'An error occurred: {e}')
-        return ['N/A', 'N/A']
+
+
 
 def extract_balance_sheet(ticker):
     headers = {
@@ -294,7 +365,7 @@ def extract_balance_sheet(ticker):
             except Exception as e:
                 logging.error(f"Error extracting {label}: {e}")
                 return 'N/A'
-        
+        #CONTINUE FROM HERE
         balance_sheet_data = {
             'Shareholders Equity': get_latest_value('Shareholders Equity'),
             'Total Assets': get_latest_value('Total Assets'),
