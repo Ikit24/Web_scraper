@@ -111,19 +111,12 @@ def extract_detailed_info(ticker):
         driver = webdriver.Firefox(options=firefox_options)
         driver.get(url)
 
-        frames = driver.find_elements(By.TAG_NAME, "iframe")
-        if frames:
-            print(f"Found {len(frames)} iframes")
-
         try:
             quarterly_results_tab = WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Quarterly Results')]"))
             )
             driver.execute_script("arguments[0].scrollIntoView();", quarterly_results_tab)
             quarterly_results_tab.click()
-
-            active_tabs = driver.find_elements(By.XPATH, "//div[contains(@class, 'active') and contains(text(), 'Quarterly Results')]")
-            print(f"Found {len(active_tabs)} active quarterly results tabs")
 
             time.sleep(5)
 
@@ -158,7 +151,6 @@ def extract_detailed_info(ticker):
                 for div in all_divs:
                     if div.string and label.lower() in div.string.lower():
                         label_element = div
-                        print(f"Found {label} using direct text search")
                         break
 
                 if not label_element:
@@ -166,14 +158,12 @@ def extract_detailed_info(ticker):
                     for element in label_elements:
                         if element.find('div', string=lambda s: s and label.lower() in s.lower().strip()):
                             label_element = element
-                            print(f"Found {label} using valign-wrapper class")
                             break
 
                 if not label_element:
                     elements = soup.find_all(string=lambda s: s and label.lower() in s.lower().strip())
                     if elements:
                         label_element = elements[0].parent
-                        print(f"Found {label} using generic text search")
 
                 if not label_element:
                     print(f"Could not find element for {label}")
@@ -188,7 +178,6 @@ def extract_detailed_info(ticker):
                             current = current.parent
                             if current.name == 'div' and len(current.find_all('div')) > 2:
                                 row = current
-                                print(f"Found container for {label} using level-up search")
                                 break
                 
                 if not row:
@@ -216,10 +205,47 @@ def extract_detailed_info(ticker):
             except Exception as e:
                 logging.error(f"Error extracting {label}: {e}")
                 return 'N/A'
+            
+        quarterly_balance_data = {
+            'Revenues': get_latest_value('Revenues'),
+            'Cost of Revenue': get_latest_value('Cost of Revenue'),
+            'General & Administrative Expenses': get_latest_value('General & Administrative Expenses'),
+            'Operating Expenses': get_latest_value('Operating Expenses'),
+            'Interest Expense': get_latest_value('Interest Expense'),
+            'Depreciation, Amortization & Accretion': get_latest_value('Depreciation, Amortization & Accretion'),
+            'Earnings & Depreciation Amortization (EBITDA)': get_latest_value('Earnings & Depreciation Amortization (EBITDA)'),
+            'Gross Profit': get_latest_value('Gross Profit'),
+            'Net Income': get_latest_value('Net Income'),
+            'Weighted Average Shares': get_latest_value('Weighted Average Shares'),
+            'Operating Income': get_latest_value('Operating Income')
+        }
 
+        print("\nExtracted quarterly results:")
+        for key, value in quarterly_balance_data.items():
+            print(f"{key}: {value}")
 
+        if all(value== 'N/A' for value in quarterly_balance_data.values()):
+            logging.warning(f"No meaningful data extracted for {ticker}")
 
-
+        return [[
+            quarterly_balance_data['Revenues'],
+            quarterly_balance_data['Cost of Revenue'],
+            quarterly_balance_data['General & Administrative Expenses'],
+            quarterly_balance_data['Operating Expenses'],
+            quarterly_balance_data['Interest Expense'],
+            quarterly_balance_data['Depreciation, Amortization & Accretion'],
+            quarterly_balance_data['Earnings & Depreciation Amortization (EBITDA)'],
+            quarterly_balance_data['Gross Profit'],
+            quarterly_balance_data['Net Income'],
+            quarterly_balance_data['Weighted Average Shares'],
+            quarterly_balance_data['Operating Income'],
+        ]]
+    except Exception as e:
+        logging.error(f'Error extracting quarterly results for {ticker}: {e}')
+        return [['N/A'] * 10]
+    finally:
+        if driver:
+            driver.quit()         
 
 
 def extract_balance_sheet(ticker):
@@ -237,27 +263,14 @@ def extract_balance_sheet(ticker):
         driver = webdriver.Firefox(options=firefox_options)
         driver.get(url)
         
-        frames = driver.find_elements(By.TAG_NAME, "iframe")
-        if frames:
-            print(f"Found {len(frames)} iframes")
-
         try:
             balance_sheet_tab = WebDriverWait(driver, 20).until(
                 EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Balance Sheet')]"))
             )
             driver.execute_script("arguments[0].scrollIntoView();", balance_sheet_tab)
             balance_sheet_tab.click()
-            
-            # Verify tab click
-            print("Tab click attempted - checking for active tab...")
-            active_tabs = driver.find_elements(By.XPATH, "//div[contains(@class, 'active') and contains(text(), 'Balance Sheet')]")
-            print(f"Found {len(active_tabs)} active balance sheet tabs")
-            
+                       
             time.sleep(5)
-            
-            # # Print page source for debugging
-            # print("Page source after tab click:", driver.page_source[:1000])
-            # print("Extended page source:", driver.page_source[:5000])
             
             try:
                 WebDriverWait(driver, 30).until(
@@ -271,29 +284,15 @@ def extract_balance_sheet(ticker):
         
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         
-        # Look for various possible terms to identify the structure
-        balance_sheet_terms = ["Shareholders Equity", "Total Assets", "Current Assets", 
-                               "Balance Sheet", "Liabilities", "Cash and Equivalents"]
-        
-        for term in balance_sheet_terms:
-            elements = soup.find_all(string=lambda s: s and term in s)
-            print(f"Found {len(elements)} elements containing '{term}'")
-            if elements:
-                for elem in elements[:2]:  # Print first 2 examples
-                    parent = elem.parent
-                    print(f"Example element for '{term}': {parent.name}, classes: {parent.get('class', 'No class')}")
-        
         def get_latest_value(label):
             try:
                 label_element = None
-                # Try various selector patterns that might find the label
                 
                 # Method 1: Direct text search in all divs
                 all_divs = soup.find_all('div')
                 for div in all_divs:
                     if div.string and label.lower() in div.string.lower():
                         label_element = div
-                        print(f"Found {label} using direct text search")
                         break
                 
                 if not label_element:
@@ -302,7 +301,6 @@ def extract_balance_sheet(ticker):
                     for element in label_elements:
                         if element.find('div', string=lambda s: s and label.lower() in s.lower().strip()):
                             label_element = element
-                            print(f"Found {label} using valign-wrapper class")
                             break
                 
                 if not label_element:
@@ -310,14 +308,11 @@ def extract_balance_sheet(ticker):
                     elements = soup.find_all(string=lambda s: s and label.lower() in s.lower().strip())
                     if elements:
                         label_element = elements[0].parent
-                        print(f"Found {label} using generic text search")
                 
                 if not label_element:
                     print(f"Could not find element for {label}")
                     return 'N/A'
-                
-                # Navigate up to find container and then locate value
-                
+                                
                 # Method 1: Look for parent with Row class
                 row = label_element.find_parent('div', class_=lambda c: c and 'Row' in c)
                 
@@ -330,7 +325,6 @@ def extract_balance_sheet(ticker):
                             current = current.parent
                             if current.name == 'div' and len(current.find_all('div')) > 2:
                                 row = current
-                                print(f"Found container for {label} using level-up search")
                                 break
                 
                 if not row:
@@ -365,7 +359,7 @@ def extract_balance_sheet(ticker):
             except Exception as e:
                 logging.error(f"Error extracting {label}: {e}")
                 return 'N/A'
-        #CONTINUE FROM HERE
+            
         balance_sheet_data = {
             'Shareholders Equity': get_latest_value('Shareholders Equity'),
             'Total Assets': get_latest_value('Total Assets'),
@@ -379,12 +373,10 @@ def extract_balance_sheet(ticker):
             'Total Liabilities': get_latest_value('Total Liabilities')
         }
         
-        # Print what we found
         print("\nExtracted balance sheet data:")
         for key, value in balance_sheet_data.items():
             print(f"{key}: {value}")
         
-        # Check if meaningful data was extracted
         if all(value == 'N/A' for value in balance_sheet_data.values()):
             logging.warning(f"No meaningful data extracted for {ticker}")
         
@@ -440,7 +432,7 @@ def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.x
 
         if os.path.exists(filename):
             os.remove(filename)
-            print('Existing Excel file deleted')
+            print('\nExisting Excel file deleted')
 
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
             df1.to_excel(writer, sheet_name='Sheet1', index=False, startrow=0)
@@ -451,7 +443,7 @@ def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.x
             startrow_df3 = len(df2) + 5
             df3.to_excel(writer, sheet_name='Sheet1', index=False, startrow=startrow_df3)
         
-        print('Scraping finished and data exported!')
+        print('\nScraping finished and data exported!')
     else:
         print('No data scraped')
 
