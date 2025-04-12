@@ -138,7 +138,7 @@ def extract_detailed_info(ticker):
                                    "Net Income", "Weighted Average Shares", "Operating Income"]
         
         for term in quarterly_results_terms:
-            elements = soup.find_all(string=lambda s : s and term in s)
+            elements = soup.find_all(string=lambda s: s and term in s)
             if elements:
                 for elem in elements[:2]:
                     parent= elem.parent
@@ -288,7 +288,6 @@ def extract_balance_sheet(ticker):
             try:
                 label_element = None
                 
-                # Method 1: Direct text search in all divs
                 all_divs = soup.find_all('div')
                 for div in all_divs:
                     if div.string and label.lower() in div.string.lower():
@@ -296,7 +295,6 @@ def extract_balance_sheet(ticker):
                         break
                 
                 if not label_element:
-                    # Method 2: Look for valign-wrapper class
                     label_elements = soup.find_all('div', class_='valign-wrapper')
                     for element in label_elements:
                         if element.find('div', string=lambda s: s and label.lower() in s.lower().strip()):
@@ -304,7 +302,6 @@ def extract_balance_sheet(ticker):
                             break
                 
                 if not label_element:
-                    # Method 3: More generic search for any element containing label text
                     elements = soup.find_all(string=lambda s: s and label.lower() in s.lower().strip())
                     if elements:
                         label_element = elements[0].parent
@@ -312,13 +309,10 @@ def extract_balance_sheet(ticker):
                 if not label_element:
                     print(f"Could not find element for {label}")
                     return 'N/A'
-                                
-                # Method 1: Look for parent with Row class
+                
                 row = label_element.find_parent('div', class_=lambda c: c and 'Row' in c)
                 
-                # Method 2: If no Row class, try parent with other potential indicators
                 if not row:
-                    # Look up to 3 levels for a div that might contain the value
                     current = label_element
                     for _ in range(3):
                         if current.parent:
@@ -333,10 +327,8 @@ def extract_balance_sheet(ticker):
                 
                 # Try different ways to extract value
                 
-                # Method 1: Look for Col class elements
                 value_divs = row.find_all('div', class_=lambda c: c and 'Col' in c)
                 
-                # Method 2: If no Col class, look for any divs inside
                 if not value_divs or len(value_divs) < 2:
                     value_divs = row.find_all('div', recursive=False)
                 
@@ -344,13 +336,10 @@ def extract_balance_sheet(ticker):
                     print(f"No value columns found for {label}")
                     return 'N/A'
                 
-                # Try to get the latest value (usually last column)
                 latest_value_div = value_divs[-1]
                 
-                # Method 1: Look for RowHead class
                 value = latest_value_div.find('div', class_=lambda c: c and 'RowHead' in c)
                 
-                # Method 2: If no RowHead class, take the text directly
                 if not value:
                     value = latest_value_div.get_text(strip=True)
                     return value if value else 'N/A'
@@ -399,14 +388,156 @@ def extract_balance_sheet(ticker):
         if driver:
             driver.quit()
 
-def extract_income_statement(ticker):
-    pass
-
 def extract_cash_flow(ticker):
-    pass
+    headers = {
+    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36'
+}
+    url = f'https://groww.in/us-stocks/{ticker}/company-financial'
+    driver = None
+
+    try:
+        firefox_options = Options()
+        firefox_options.add_argument("--headless")
+        firefox_options.set_preference("general.useragent.override", headers['user-agent'])
+
+        driver = webdriver.Firefox(options=firefox_options)
+        driver.get(url)
+
+        try:
+            cash_flow_tab = WebDriverWait(driver, 20).until(
+                EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Cash Flow')]"))
+            )
+            driver.execute_script("arguments[0].scrollIntoView();", cash_flow_tab)
+            cash_flow_tab.click()
+
+            time.sleep(5)
+
+            try:
+                WebDriverWait(driver, 30).until(
+                    lambda d: "Cash Flow" in d.page_source and len(d.find_elements(By.XPATH, "//div[contains(text(), 'Investing Cash Flow')]")) > 0
+                )
+            except Exception as e:
+                print(f"Warning: Wait condition failed: {e}")
         
-def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.xlsx'):
-    if all(data_source is not None for data_source in(basic_data, detailed_data, balance_sheet)):
+        except Exception as e:
+            print(f"Error clicking Quarterly Results tab: {e}")
+
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        cash_flow_terms = ["Investing Cash Flow", "Operations Cash Flow", "Financing Cash Flow",
+                           "Net Cash Flow", "Free Cash Flow", "Capital Expenditure", "Cash and Equivalents",
+                           "Payments & Cash Distribution", "Basic Common Share", "Working Capital"]
+        
+        for term in cash_flow_terms:
+            elements = soup.find_all(string=lambda s: s and term in s)
+            if elements:
+                for elem in elements[:2]:
+                    parent = elem.parent
+
+        def get_latest_value(label):
+            try:
+                label_element = None
+
+                all_divs = soup.find_all('div')
+                for div in all_divs:
+                    if div.string and label.lower() in div.string.lower():
+                        label_element = div
+                        break
+
+                if not label_element:
+                    label_elements = soup.find_all('div', class_='valign-wrapper')
+                    for element in label_elements:
+                        if element.find('div', string=lambda s: s and label.lower() in s.lower().strip()):
+                            label_element = element
+                            break
+
+                if not label_element:
+                    elements = soup.find_all(string=lambda s: s and label.lower() in s.lower().strip())
+                    if elements:
+                        label_element = elements[0].parent
+
+                if not label_element:
+                    print(f"Could not find element for {label}")
+                    return 'N/A'
+                
+                row = label_element.find_parent('div', class_=lambda c: c and 'Row' in c)
+
+                if not row:
+                    current = label_element
+                    for _ in range(5):
+                        if current.parent:
+                            current = current.parent
+                            if current.name == 'div' and len(current.find_all('div')) > 2:
+                                row = current
+                                break
+                
+                if not row:
+                    print(f"Could not find container row for {label}")
+                    return 'N/A'
+                
+                value_divs = row.find_all('div', class_=lambda c:c and 'Col' in c)
+
+                if not value_divs or len(value_divs) < 2:
+                    value_divs = row.find_all('div', revursive=False)
+                
+                if not value_divs or len(value_divs) < 2:
+                    print(f"No value columns found for {label}")
+                    return 'N/A'
+                
+                latest_value_div = value_divs[-1]
+
+                value = latest_value_div.find('div', class_=lambda c: c and 'RowHead' in c)
+
+                if not value:
+                    value = latest_value_div.get_text(strip=True)
+                    return value if value else 'N/A'
+                
+                return value.text.strip() if value and hasattr(value, 'text') else 'N/A'
+            except Exception as e:
+                logging.error(f"Error extracting {label}: {e}")
+                return 'N/A'
+            
+        cash_flow_data = {
+            'Investing Cash Flow': get_latest_value('Investing Cash Flow'),
+            'Operations Cash Flow': get_latest_value('Operations Cash Flow'),
+            'Financing Cash Flow': get_latest_value('Financing Cash Flow'),
+            'Net Cash Flow': get_latest_value('Net Cash Flow'),
+            'Free Cash Flow': get_latest_value('Free Cash Flow'),
+            'Capital Expenditure': get_latest_value('Capital Expenditure'),
+            'Cash and Equivalents': get_latest_value('Cash and Equivalents'),
+            'Payments & Cash Distribution': get_latest_value('Payments & Cash Distribution'),
+            'Basic Common Share': get_latest_value('Basic Common Share'),
+            'Working Capital': get_latest_value('Working Capital'),
+        }
+            
+        print("\nExtracted quarterly results:")
+        for key, value in cash_flow_data.items():
+            print(f"{key}: {value}")
+
+        if all(value== 'N/A' for value in cash_flow_data.values()):
+            logging.warning(f"No meaningful data extracted for {ticker}")
+
+        return [[
+            cash_flow_data['Investing Cash Flow'],
+            cash_flow_data['Operations Cash Flow'],
+            cash_flow_data['Financing Cash Flow'],
+            cash_flow_data['Net Cash Flow'],
+            cash_flow_data['Free Cash Flow'],
+            cash_flow_data['Capital Expenditure'],
+            cash_flow_data['Cash and Equivalents'],
+            cash_flow_data['Payments & Cash Distribution'],
+            cash_flow_data['Basic Common Share'],
+            cash_flow_data['Working Capital']
+        ]]
+    except Exception as e:
+        logging.error(f'Error extracting quarterly results for {ticker}: {e}')
+        return [['N/A'] * 10]
+    finally:
+        if driver:
+            driver.quit() 
+
+def export_to_excel(basic_data, detailed_data, balance_sheet, cash_flow, filename='stocks.xlsx'):
+    if all(data_source is not None for data_source in(basic_data, detailed_data, balance_sheet, cash_flow)):
         basic_names = [
             'Company', 'Price', 'Change', 'Market Cap', 'Volume', 'P_E ratio', 'P_B ratio',
             'EPS(TTM)', 'Div. Yield', 'Book Value'
@@ -426,9 +557,16 @@ def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.x
             'Tax Assets', 'Cash and Equivalents (USD)', 'Total Liabilities'
             ]
         
+        cash_flow_names = [
+            "Investing Cash Flow", "Operations Cash Flow", "Financing Cash Flow",
+            "Net Cash Flow", "Free Cash Flow", "Capital Expenditure", "Cash and Equivalents",
+            "Payments & Cash Distribution", "Basic Common Share", "Working Capital"
+        ]
+        
         df1 = pd.DataFrame(basic_data, columns=basic_names)
         df2 = pd.DataFrame(detailed_data, columns=detailed_info_names)
         df3 = pd.DataFrame(balance_sheet, columns=balance_sheet_names)
+        df4 = pd.DataFrame(cash_flow, columns=cash_flow_names)
 
         if os.path.exists(filename):
             os.remove(filename)
@@ -442,6 +580,9 @@ def export_to_excel(basic_data, detailed_data, balance_sheet, filename='stocks.x
 
             startrow_df3 = len(df2) + 5
             df3.to_excel(writer, sheet_name='Sheet1', index=False, startrow=startrow_df3)
+
+            startrow_df3 = len(df3) + 8
+            df4.to_excel(writer, sheet_name='Sheet1', index=False, startrow=startrow_df3)
         
         print('\nScraping finished and data exported!')
     else:
@@ -452,7 +593,8 @@ def main():
     basic_data = extract_basic_info(ticker)
     detailed_data = extract_detailed_info(ticker)
     balance_sheet = extract_balance_sheet(ticker)
-    export_to_excel(basic_data, detailed_data, balance_sheet)
+    cash_flow = extract_cash_flow(ticker)
+    export_to_excel(basic_data, detailed_data, balance_sheet, cash_flow)
 
 if __name__ == '__main__':
     main()
