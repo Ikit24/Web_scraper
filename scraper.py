@@ -1,15 +1,14 @@
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
 import os
+import time
+import logging
+import requests
+import pandas as pd
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
-import time
-import logging
 
 def extract_basic_info(ticker):
     headers = {
@@ -27,7 +26,7 @@ def extract_basic_info(ticker):
         company_options = [
             soup.find('h1', {'class': 'usph14Head displaySmall'}),
             soup.find('h1', {'class': 'displaySmall lh28 fontSize28'}),
-            soup.find('h1')  # Fallback to any h1
+            soup.find('h1')
         ]
         company = next((elem.text.strip() for elem in company_options if elem), 'Unknown Company')
     
@@ -324,8 +323,6 @@ def extract_balance_sheet(ticker):
                 if not row:
                     print(f"Could not find container row for {label}")
                     return 'N/A'
-                
-                # Try different ways to extract value
                 
                 value_divs = row.find_all('div', class_=lambda c: c and 'Col' in c)
                 
