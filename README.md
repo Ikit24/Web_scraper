@@ -4,16 +4,15 @@ This Python script scrapes stock information from Groww.in for stock tickers, ex
 
 Features:
 
-Concurrent web scraping of multiple stock tickers
+Concurrent web scraping for stock tickers
 
 Extracts key stock information:
 
-Company Name
-Current Price
-Price Change
-Trading Volume
-P/E Ratio
+Fundamentals
+Quarterly results
+Balance sheet information
+Cash flow information
 
+Disclaimer: The data of the website is outdated but I couldn't find a site which allows scraping.
 
 Saves data to an Excel spreadsheet
-Asynchronous processing for improved performance
