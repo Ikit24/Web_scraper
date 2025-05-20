@@ -13,6 +13,6 @@ Quarterly results
 Balance sheet information
 Cash flow information
 
-Disclaimer: The data of the website is outdated but I couldn't find a site which allows scraping.
+Saves data to an Excel spreadsheet.
 
-Saves data to an Excel spreadsheet
+Disclaimer: The data of the website is outdated but I couldn't find a site which allows scraping.
